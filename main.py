@@ -98,7 +98,7 @@ class LocationCreate(BaseModel):
 app = FastAPI(
     title="3D Print Farm Manager API",
     description="Backend server to manage and proxy requests to Elegoo 3D printers.",
-    version="1.2.0"
+    version="1.3.0"
 )
 
 @app.on_event("startup")
@@ -231,44 +231,74 @@ async def websocket_proxy(websocket: WebSocket, printer_id: str):
     except Exception as e:
         print(f"An error occurred in the websocket proxy: {e}")
 
-# --- FIX: More resilient HTTP Proxy ---
-async def safe_stream_generator(response):
-    """
-    A generator that safely iterates over the response stream,
-    catching ReadError exceptions to prevent the server from crashing.
-    """
-    try:
-        async for chunk in response.aiter_raw():
-            yield chunk
-    except httpx.ReadError as e:
-        print(f"ERROR: HTTPX ReadError while streaming from {response.request.url}. "
-              f"The printer may have closed the connection prematurely. Error: {e}")
-        # This will gracefully end the stream on the client side.
-
+# --- NEW: Robust Video Proxy using Frame Parsing ---
 async def http_proxy_stream(request: Request, target_url: str):
     """
-    Proxies a request to the target URL and streams the response.
-    Handles connection errors and streaming errors gracefully.
+    Proxies a video stream by manually parsing and re-streaming frames.
+    This approach is robust against unstable source connections from the printer.
+    It reconstructs a clean MJPEG stream for the client.
+    """
+    boundary = "foo"
+    
+    async def frame_generator():
+        """
+        Connects to the printer, parses JPEG frames, and yields them
+        formatted for a valid MJPEG stream.
+        """
+        byte_buffer = b''
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream("GET", target_url, timeout=30.0) as response:
+                    response.raise_for_status()
+                    
+                    async for chunk in response.aiter_raw():
+                        byte_buffer += chunk
+                        
+                        start = byte_buffer.find(b'\xff\xd8')
+                        end = byte_buffer.find(b'\xff\xd9')
+                        
+                        if start != -1 and end != -1:
+                            jpg_frame = byte_buffer[start:end+2]
+                            byte_buffer = byte_buffer[end+2:]
+                            
+                            yield (
+                                f"--{boundary}\r\n"
+                                f"Content-Type: image/jpeg\r\n"
+                                f"Content-Length: {len(jpg_frame)}\r\n\r\n"
+                            ).encode() + jpg_frame + b"\r\n"
+        
+        except httpx.RequestError as e:
+            print(f"Error connecting to printer stream at {target_url}: {e}")
+            return
+        except Exception as e:
+            print(f"An unexpected error occurred while streaming: {e}")
+            return
+
+    headers = {
+        "Content-Type": f"multipart/x-mixed-replace; boundary={boundary}",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Connection": "keep-alive"
+    }
+    
+    return StreamingResponse(frame_generator(), headers=headers)
+
+# --- Robust Image Proxy ---
+async def http_proxy_get_content(target_url: str):
+    """
+    Proxies a static file (like an image) by downloading it completely
+    first, then serving it. This is resilient to unstable source connections.
     """
     try:
         async with httpx.AsyncClient() as client:
-            req = client.build_request(
-                method=request.method, url=target_url,
-                headers={k: v for k, v in request.headers.items() if k.lower() not in ['host', 'origin', 'referer', 'accept-encoding']},
-                content=await request.body()
-            )
-            resp = await client.send(req, stream=True)
-            return StreamingResponse(
-                safe_stream_generator(resp), # Use the safe generator
-                status_code=resp.status_code,
-                headers=resp.headers
-            )
-    except httpx.ConnectError as e:
-        # This error happens if the initial connection to the printer fails
-        raise HTTPException(status_code=502, detail=f"Failed to connect to printer at {target_url}: {e}")
+            resp = await client.get(target_url, timeout=30.0)
+            resp.raise_for_status()
+            content_type = resp.headers.get('content-type', 'application/octet-stream')
+            return Response(content=resp.content, media_type=content_type)
     except httpx.RequestError as e:
-        # This catches other general httpx errors
-        raise HTTPException(status_code=500, detail=f"An error occurred while proxying to {target_url}: {e}")
+        raise HTTPException(status_code=502, detail=f"Could not retrieve content from printer: {e}")
+
 
 @app.get("/printers/{printer_id}/video", tags=["Proxy"])
 async def video_proxy(request: Request, printer_id: str):
@@ -282,7 +312,7 @@ async def image_proxy(request: Request, printer_id: str, task_id: str):
     printer = await get_printer_details_from_db(printer_id)
     if not printer: raise HTTPException(status_code=404, detail="Printer not found")
     target_url = f"http://{printer.ip_address}:{printer.http_port}/board-resource/history_image/{task_id}.png"
-    return await http_proxy_stream(request, target_url)
+    return await http_proxy_get_content(target_url)
 
 # --- Frontend Hosting ---
 class SPAStaticFiles(StaticFiles):
