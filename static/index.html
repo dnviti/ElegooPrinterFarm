@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Print Farm Manager</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+            color: #f9fafb; /* text-gray-50 */
+        }
+        .page, .modal { display: none; }
+        .page.active, .modal.active { display: flex; }
+        .modal-backdrop { transition: opacity 0.3s ease; }
+    </style>
+</head>
+<body>
+
+    <!-- Main container for the application -->
+    <div id="app-container">
+
+        <!-- Login Page -->
+        <div id="login-page" class="page min-h-screen items-center justify-center">
+            <div class="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-lg">
+                <div class="text-center">
+                    <div class="flex justify-center items-center gap-3 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8"/></svg>
+                        <h1 class="text-3xl font-bold text-white">3D Print Farm Manager</h1>
+                    </div>
+                    <p class="text-gray-400">Sign in to continue</p>
+                </div>
+                <form id="login-form" class="space-y-6">
+                    <div>
+                        <label class="text-sm font-bold text-gray-400 block mb-2">Username</label>
+                        <input type="text" id="username" value="admin" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600 focus:border-blue-500 focus:outline-none" placeholder="admin">
+                    </div>
+                    <div>
+                        <label class="text-sm font-bold text-gray-400 block mb-2">Password</label>
+                        <input type="password" id="password" value="password" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600 focus:border-blue-500 focus:outline-none" placeholder="password">
+                    </div>
+                    <p id="login-error" class="text-red-400 text-sm hidden"></p>
+                    <button type="submit" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-bold transition">Login</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Printer List Page -->
+        <div id="list-page" class="page flex-col p-4 sm:p-6 lg:p-8">
+            <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
+                <div class="flex items-center gap-3">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    <h1 class="text-3xl font-bold text-white">My Print Farm</h1>
+                </div>
+                <div class="flex items-center gap-2">
+                     <button id="add-printer-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <span>Add Printer</span>
+                    </button>
+                    <button id="manage-locations-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        <span>Locations</span>
+                    </button>
+                    <button id="logout-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Logout</button>
+                </div>
+            </header>
+            <div id="printer-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Printer cards will be inserted here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Printer Detail Page -->
+        <div id="detail-page" class="page flex-col p-4 sm:p-6 lg:p-8">
+            <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
+                <div class="flex items-center">
+                    <button id="back-to-list-btn" class="p-2 rounded-full hover:bg-gray-700 mr-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <div>
+                        <h1 id="detail-printer-name" class="text-3xl font-bold text-white"></h1>
+                        <p id="detail-printer-location" class="text-gray-400"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="edit-printer-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg> Edit
+                    </button>
+                    <button id="delete-printer-btn" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg> Delete
+                    </button>
+                </div>
+            </header>
+            <div id="detail-content-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <!-- Content populated by JS -->
+            </div>
+        </div>
+        
+        <!-- Locations Page -->
+        <div id="locations-page" class="page flex-col p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
+             <header class="flex items-center mb-8">
+                <button id="back-to-list-from-locations-btn" class="p-2 rounded-full hover:bg-gray-700 mr-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <h1 class="text-3xl font-bold text-white">Manage Locations</h1>
+            </header>
+            <div class="bg-gray-800 p-8 rounded-xl shadow-lg">
+                <form id="add-location-form" class="flex gap-4 mb-6">
+                    <input type="text" id="new-location-name" placeholder="Add new location name" class="flex-grow p-3 bg-gray-700 rounded-md text-white border border-gray-600 focus:border-blue-500 focus:outline-none">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">Add</button>
+                </form>
+                <ul id="locations-list" class="space-y-3">
+                    <!-- Location items will be inserted here -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Add/Edit Printer and Delete Confirmation -->
+    <div id="modal" class="modal fixed inset-0 items-center justify-center z-50 bg-black bg-opacity-75">
+        <div id="modal-content" class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <!-- Modal content will be injected here -->
+        </div>
+    </div>
+
+    <!-- Templates -->
+    <template id="printer-card-template">
+        <div class="printer-card bg-gray-800 rounded-xl shadow-lg p-6 cursor-pointer hover:scale-105 hover:shadow-blue-500/20 transition-transform duration-300">
+            <div class="flex justify-between items-start">
+                 <div class="flex items-center gap-4">
+                    <div class="bg-green-500 w-3 h-3 rounded-full animate-pulse"></div>
+                    <div>
+                        <h2 class="printer-name text-xl font-bold text-white"></h2>
+                        <p class="printer-location text-gray-400"></p>
+                    </div>
+                </div>
+                <span class="text-green-400 text-sm font-semibold">Online</span>
+            </div>
+            <div class="mt-4 border-t border-gray-700 pt-4 text-sm text-gray-300">
+                <p class="printer-ip"></p>
+            </div>
+        </div>
+    </template>
+
+    <template id="printer-form-template">
+        <h3 class="modal-title text-xl font-bold text-white mb-4"></h3>
+        <form id="printer-form" class="space-y-4">
+            <input type="hidden" id="printer-id">
+            <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">Name</label>
+                <input type="text" id="printer-name" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600" required>
+            </div>
+            <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">Location</label>
+                <select id="printer-location" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600" required></select>
+            </div>
+            <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">IP Address</label>
+                <input type="text" id="printer-ip_address" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600" required>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                 <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">WS Port</label>
+                    <input type="number" id="printer-websocket_port" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">HTTP Port</label>
+                    <input type="number" id="printer-http_port" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">Video Port</label>
+                    <input type="number" id="printer-video_port" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-4 pt-4">
+                <button type="button" class="modal-cancel-btn px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-semibold">Save</button>
+            </div>
+        </form>
+    </template>
+
+    <template id="delete-confirm-template">
+        <h3 class="text-xl font-bold text-white mb-4">Delete Printer</h3>
+        <p class="text-gray-300 mb-6">Are you sure you want to delete this printer? This action cannot be undone.</p>
+        <div class="flex justify-end space-x-4">
+            <button type="button" class="modal-cancel-btn px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Cancel</button>
+            <button type="button" id="confirm-delete-btn" class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold">Confirm</button>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const API_CONFIG = {
+                backendBaseUrl: 'http://127.0.0.1:8000',
+                getWebsocketUrl: (printerId) => `ws://127.0.0.1:8000/printers/${printerId}/websocket`,
+                getVideoUrl: (printerId) => `http://127.0.0.1:8000/printers/${printerId}/video`,
+                getModelImageUrl: (printerId, taskId) => `http://127.0.0.1:8000/printers/${printerId}/board-resource/history_image/${taskId}.png`,
+            };
+
+            const state = {
+                currentPage: 'login',
+                printers: [],
+                locations: [],
+                selectedPrinterId: null,
+                formMode: 'add', // 'add' or 'edit'
+                ws: null,
+            };
+
+            const pages = {
+                login: document.getElementById('login-page'),
+                list: document.getElementById('list-page'),
+                detail: document.getElementById('detail-page'),
+                locations: document.getElementById('locations-page'),
+            };
+            
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            const templates = {
+                printerCard: document.getElementById('printer-card-template'),
+                printerForm: document.getElementById('printer-form-template'),
+                deleteConfirm: document.getElementById('delete-confirm-template'),
+            };
+
+            function navigate(page, printerId = null) {
+                state.currentPage = page;
+                state.selectedPrinterId = printerId;
+                if (state.ws) { state.ws.close(); state.ws = null; }
+                Object.values(pages).forEach(p => p.classList.remove('active'));
+                pages[page].classList.add('active');
+
+                if (page === 'list') renderPrinterList();
+                else if (page === 'detail' && printerId) renderPrinterDetail();
+                else if (page === 'locations') renderLocationsList();
+            }
+            
+            // --- MODAL LOGIC ---
+            function showModal(contentTemplate, onInit) {
+                modalContent.innerHTML = '';
+                modalContent.appendChild(contentTemplate.content.cloneNode(true));
+                modal.classList.add('active');
+                if (onInit) onInit();
+                
+                modalContent.querySelector('.modal-cancel-btn').addEventListener('click', hideModal);
+            }
+
+            function hideModal() {
+                modal.classList.remove('active');
+                modalContent.innerHTML = '';
+            }
+
+            // --- API CALLS ---
+            async function apiRequest(endpoint, method = 'GET', body = null) {
+                const options = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                };
+                if (body) options.body = JSON.stringify(body);
+                const response = await fetch(`${API_CONFIG.backendBaseUrl}${endpoint}`, options);
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(error.detail);
+                }
+                if (response.status === 204) return null; // No Content
+                return response.json();
+            }
+
+            async function fetchData() {
+                try {
+                    const [printers, locations] = await Promise.all([
+                        apiRequest('/api/printers'),
+                        apiRequest('/api/locations')
+                    ]);
+                    state.printers = printers;
+                    state.locations = locations;
+                    return true;
+                } catch (error) {
+                    alert(`Error fetching data: ${error.message}`);
+                    return false;
+                }
+            }
+
+            // --- RENDER FUNCTIONS ---
+            function renderPrinterList() {
+                const container = document.getElementById('printer-list-container');
+                container.innerHTML = '';
+                state.printers.forEach(printer => {
+                    const card = templates.printerCard.content.cloneNode(true).firstElementChild;
+                    card.dataset.printerId = printer.id;
+                    card.querySelector('.printer-name').textContent = printer.name;
+                    card.querySelector('.printer-location').textContent = printer.location;
+                    card.querySelector('.printer-ip').textContent = `IP: ${printer.ip_address}`;
+                    container.appendChild(card);
+                });
+            }
+
+            async function renderPrinterDetail() {
+                const printer = state.printers.find(p => p.id === state.selectedPrinterId);
+                if (!printer) { navigate('list'); return; }
+                
+                document.getElementById('detail-printer-name').textContent = printer.name;
+                document.getElementById('detail-printer-location').textContent = printer.location;
+                
+                const container = document.getElementById('detail-content-container');
+                container.innerHTML = `
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4">
+                        <div class="mb-3"><p class="text-gray-400 text-sm">Printing</p><p id="detail-filename" class="text-white text-lg font-semibold truncate">N/A</p></div>
+                        <div class="w-full bg-gray-700 rounded-full h-4"><div id="detail-progress-bar" class="bg-blue-600 h-4 rounded-full text-center text-white text-xs flex items-center justify-center" style="width: 0%;">0%</div></div>
+                        <div class="flex justify-between text-sm text-gray-400 mt-2"><span id="detail-elapsed-time"></span><span id="detail-layer"></span><span id="detail-remaining-time"></span></div>
+                    </div>
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-4">Control (Display Only)</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-50"><div class="grid grid-cols-3 grid-rows-3 gap-2 bg-gray-900/50 p-2 rounded-lg"><div class="col-start-2 row-start-1"><button class="flex flex-col items-center justify-center p-2 bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button></div><div class="col-start-1 row-start-2"><button class="flex flex-col items-center justify-center p-2 bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button></div><div class="col-start-2 row-start-2"><button class="flex flex-col items-center justify-center p-2 bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></button></div><div class="col-start-3 row-start-2"><button class="flex flex-col items-center justify-center p-2 bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button></div><div class="col-start-2 row-start-3"><button class="flex flex-col items-center justify-center p-2 bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></button></div></div><div class="space-y-2"><button class="w-full flex items-center p-2 rounded-md bg-gray-700"><span class="ml-2 text-sm">Model Fan</span><span class="ml-auto text-xs">OFF</span></button><button class="w-full flex items-center p-2 rounded-md bg-gray-700"><span class="ml-2 text-sm">Auxiliary Fan</span><span class="ml-auto text-xs">OFF</span></button><button class="w-full flex items-center p-2 rounded-md bg-gray-700"><span class="ml-2 text-sm">Lighting</span><span class="ml-auto text-xs">OFF</span></button></div></div></div>
+                </div>
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Monitoring</h3><img id="detail-video" src="${API_CONFIG.getVideoUrl(printer.id)}" class="w-full rounded-lg bg-black"></div>
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Temperature</h3><div id="detail-temp-container" class="divide-y divide-gray-700"></div></div>
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Model Image</h3><img id="detail-model-image" src="https://placehold.co/600x400/1F2937/FFFFFF?text=Waiting..." class="w-full h-auto object-contain rounded-lg bg-gray-700"></div>
+                </div>`;
+                connectWebSocket(printer.id);
+            }
+
+            function updateDetailFromWS(wsData) {
+                const printInfo = wsData?.Status?.PrintInfo;
+                const status = wsData?.Status;
+                const progress = printInfo?.Progress || 0;
+                document.getElementById('detail-filename').textContent = printInfo?.Filename || 'N/A';
+                const progressBar = document.getElementById('detail-progress-bar');
+                progressBar.style.width = `${progress}%`;
+                progressBar.textContent = `${progress}%`;
+                document.getElementById('detail-elapsed-time').textContent = `Elapsed: ${printInfo ? new Date(printInfo.CurrentTicks * 1000).toISOString().substr(11, 8) : '00:00:00'}`;
+                document.getElementById('detail-remaining-time').textContent = `Remaining: ${printInfo && printInfo.TotalTicks > printInfo.CurrentTicks ? new Date((printInfo.TotalTicks - printInfo.CurrentTicks) * 1000).toISOString().substr(11, 8) : '00:00:00'}`;
+                document.getElementById('detail-layer').textContent = `Layer: ${printInfo?.CurrentLayer || 0}/${printInfo?.TotalLayer || 0}`;
+                const tempContainer = document.getElementById('detail-temp-container');
+                tempContainer.innerHTML = [
+                    { name: 'Nozzle', temp: status?.TempOfNozzle, target: status?.TempTargetNozzle },
+                    { name: 'Heated Bed', temp: status?.TempOfHotbed, target: status?.TempTargetHotbed },
+                    { name: 'Chamber', temp: status?.TempOfBox, target: status?.TempTargetBox },
+                ].map(t => `<div class="flex items-center justify-between text-sm py-2"><div class="flex items-center text-gray-300">${t.name}</div><div class="font-mono text-white"><span>${t.temp ? t.temp.toFixed(1) : 'N/A'}°C</span><span class="text-gray-500"> / ${t.target ? t.target.toFixed(0) : 'N/A'}°C</span></div></div>`).join('');
+                if (printInfo?.TaskId) document.getElementById('detail-model-image').src = API_CONFIG.getModelImageUrl(state.selectedPrinterId, printInfo.TaskId);
+            }
+            
+            function renderLocationsList() {
+                const container = document.getElementById('locations-list');
+                container.innerHTML = '';
+                state.locations.forEach(loc => {
+                    const isUsed = state.printers.some(p => p.location === loc);
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center bg-gray-700 p-3 rounded-md';
+                    li.innerHTML = `<span class="text-white">${loc}</span>
+                        <button data-location-name="${loc}" class="delete-location-btn p-2 rounded-full transition ${isUsed ? 'text-gray-500 cursor-not-allowed' : 'text-red-400 hover:bg-red-500/20 hover:text-red-300'}" ${isUsed ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>`;
+                    container.appendChild(li);
+                });
+            }
+
+            // --- WEBSOCKET ---
+            function connectWebSocket(printerId) {
+                if (state.ws) state.ws.close();
+                const wsUrl = API_CONFIG.getWebsocketUrl(printerId);
+                state.ws = new WebSocket(wsUrl);
+                state.ws.onmessage = (event) => updateDetailFromWS(JSON.parse(event.data));
+            }
+
+            // --- EVENT HANDLERS ---
+            async function handlePrinterFormSubmit(e) {
+                e.preventDefault();
+                const printerData = {
+                    name: document.getElementById('printer-name').value,
+                    location: document.getElementById('printer-location').value,
+                    ip_address: document.getElementById('printer-ip_address').value,
+                    websocket_port: parseInt(document.getElementById('printer-websocket_port').value),
+                    http_port: parseInt(document.getElementById('printer-http_port').value),
+                    video_port: parseInt(document.getElementById('printer-video_port').value),
+                };
+                try {
+                    if (state.formMode === 'add') {
+                        await apiRequest('/api/printers', 'POST', printerData);
+                    } else {
+                        const printerId = document.getElementById('printer-id').value;
+                        await apiRequest(`/api/printers/${printerId}`, 'PUT', printerData);
+                    }
+                    await fetchData();
+                    renderPrinterList();
+                    hideModal();
+                } catch (error) {
+                    alert(`Error saving printer: ${error.message}`);
+                }
+            }
+
+            // --- EVENT LISTENERS ---
+            document.getElementById('login-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                // Mock login
+                if (document.getElementById('username').value === 'admin' && document.getElementById('password').value === 'password') {
+                    if (await fetchData()) navigate('list');
+                } else {
+                    document.getElementById('login-error').textContent = 'Invalid credentials. Use admin/password.';
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            });
+
+            document.getElementById('logout-btn').addEventListener('click', () => navigate('login'));
+            document.getElementById('back-to-list-btn').addEventListener('click', () => navigate('list'));
+            document.getElementById('back-to-list-from-locations-btn').addEventListener('click', () => navigate('list'));
+            document.getElementById('manage-locations-btn').addEventListener('click', () => navigate('locations'));
+
+            document.getElementById('printer-list-container').addEventListener('click', (e) => {
+                const card = e.target.closest('.printer-card');
+                if (card) navigate('detail', card.dataset.printerId);
+            });
+
+            document.getElementById('add-printer-btn').addEventListener('click', () => {
+                state.formMode = 'add';
+                showModal(templates.printerForm, () => {
+                    modalContent.querySelector('.modal-title').textContent = 'Add New Printer';
+                    const locationSelect = modalContent.querySelector('#printer-location');
+                    locationSelect.innerHTML = state.locations.map(loc => `<option value="${loc}">${loc}</option>`).join('');
+                    modalContent.querySelector('#printer-form').addEventListener('submit', handlePrinterFormSubmit);
+                });
+            });
+
+            document.getElementById('edit-printer-btn').addEventListener('click', () => {
+                state.formMode = 'edit';
+                const printer = state.printers.find(p => p.id === state.selectedPrinterId);
+                showModal(templates.printerForm, () => {
+                    modalContent.querySelector('.modal-title').textContent = 'Edit Printer';
+                    modalContent.querySelector('#printer-id').value = printer.id;
+                    modalContent.querySelector('#printer-name').value = printer.name;
+                    const locationSelect = modalContent.querySelector('#printer-location');
+                    locationSelect.innerHTML = state.locations.map(loc => `<option value="${loc}" ${loc === printer.location ? 'selected' : ''}>${loc}</option>`).join('');
+                    modalContent.querySelector('#printer-ip_address').value = printer.ip_address;
+                    modalContent.querySelector('#printer-websocket_port').value = printer.websocket_port;
+                    modalContent.querySelector('#printer-http_port').value = printer.http_port;
+                    modalContent.querySelector('#printer-video_port').value = printer.video_port;
+                    modalContent.querySelector('#printer-form').addEventListener('submit', handlePrinterFormSubmit);
+                });
+            });
+
+            document.getElementById('delete-printer-btn').addEventListener('click', () => {
+                showModal(templates.deleteConfirm, () => {
+                    modalContent.querySelector('#confirm-delete-btn').addEventListener('click', async () => {
+                        try {
+                            await apiRequest(`/api/printers/${state.selectedPrinterId}`, 'DELETE');
+                            await fetchData();
+                            hideModal();
+                            navigate('list');
+                        } catch (error) {
+                            alert(`Error deleting printer: ${error.message}`);
+                        }
+                    });
+                });
+            });
+            
+            document.getElementById('add-location-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const input = document.getElementById('new-location-name');
+                const newName = input.value.trim();
+                if (newName) {
+                    try {
+                        await apiRequest('/api/locations', 'POST', { name: newName });
+                        await fetchData();
+                        renderLocationsList();
+                        input.value = '';
+                    } catch (error) {
+                        alert(`Error adding location: ${error.message}`);
+                    }
+                }
+            });
+
+            document.getElementById('locations-list').addEventListener('click', async (e) => {
+                const button = e.target.closest('.delete-location-btn');
+                if (button) {
+                    const locationName = button.dataset.locationName;
+                    if (confirm(`Are you sure you want to delete the location "${locationName}"?`)) {
+                        try {
+                            await apiRequest(`/api/locations/${locationName}`, 'DELETE');
+                            await fetchData();
+                            renderLocationsList();
+                        } catch (error) {
+                            alert(`Error deleting location: ${error.message}`);
+                        }
+                    }
+                }
+            });
+
+            // --- INITIALIZATION ---
+            navigate('login');
+        });
+    </script>
+</body>
+</html>
