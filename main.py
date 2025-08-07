@@ -154,6 +154,20 @@ async def delete_printer(printer_id: str):
         await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.get("/api/printers/{printer_id}/status", tags=["Printers"])
+async def get_printer_status(printer_id: str):
+    """Return online/offline status for a printer."""
+    printer = await get_printer_details_from_db(printer_id)
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    url = f"http://{printer.ip_address}:{printer.http_port}"
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.get(url)
+        return {"online": True}
+    except Exception:
+        return {"online": False}
+
 # Location CRUD
 @app.get("/api/locations", response_model=List[str], tags=["Locations"])
 async def get_all_locations():
