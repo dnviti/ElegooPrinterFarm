@@ -122,7 +122,8 @@ app.add_middleware(
 async def get_all_printers():
     async with engine.connect() as conn:
         result = await conn.execute(select(printers_table))
-        return result.fetchall()
+        # Convert SQLAlchemy rows to plain dictionaries so Pydantic can validate them
+        return [dict(row) for row in result.mappings().all()]
 
 @app.post("/api/printers", response_model=Printer, status_code=status.HTTP_201_CREATED, tags=["Printers"])
 async def create_printer(printer: PrinterCreate):
