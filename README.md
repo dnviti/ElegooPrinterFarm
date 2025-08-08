@@ -25,3 +25,7 @@ docker compose up --build
 ```
 
 This builds the `elegoo-printer-farm` image, maps the project directory into the container, and exposes the app on port 8000.
+
+## Continuous Integration
+
+A GitHub Actions workflow builds the Docker image and publishes it to GitHub Container Registry on pushes to `main`. The image is tagged as `ghcr.io/<OWNER>/elegoo-printer-farm:latest`.
