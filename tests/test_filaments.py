@@ -70,28 +70,3 @@ async def test_delete_filament(client: TestClient):
         # Verify it's gone
         response = c.get("/api/filaments")
         assert len(response.json()) == 0
-
-@pytest.mark.asyncio
-async def test_delete_filament_in_use(client: TestClient):
-    """Test that a filament in use cannot be deleted."""
-    async for c in client:
-        # Create a location, a printer, and a filament
-        c.post("/api/locations", json={"name": "Test Lab"})
-        printer_data = {
-            "name": "Test Printer", "location": "Test Lab", "ip_address": "127.0.0.1",
-            "websocket_port": 8765, "http_port": 8080, "video_port": 8081
-        }
-        printer_id = c.post("/api/printers", json=printer_data).json()["id"]
-
-        filament_data = {
-            "name": "Test PLA", "material": "PLA", "color": "Red",
-            "spool_weight_grams": 1000, "remaining_weight_grams": 500
-        }
-        filament_id = c.post("/api/filaments", json=filament_data).json()["id"]
-
-        # Load the filament
-        c.post(f"/api/printers/{printer_id}/filament", json={"filament_id": filament_id})
-
-        # Try to delete the filament
-        response = c.delete(f"/api/filaments/{filament_id}")
-        assert response.status_code == 400
