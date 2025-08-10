@@ -67,6 +67,10 @@
                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                         <span>Locations</span>
                     </button>
+                    <button id="manage-filaments-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+                        <span>Filaments</span>
+                    </button>
                     <button id="logout-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition">Logout</button>
                 </div>
             </header>
@@ -117,6 +121,27 @@
                 <ul id="locations-list" class="space-y-3">
                     <!-- Location items will be inserted here -->
                 </ul>
+            </div>
+        </div>
+
+        <!-- Filaments Page -->
+        <div id="filaments-page" class="page flex-col p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+             <header class="flex justify-between items-center mb-8">
+                <div class="flex items-center">
+                    <button id="back-to-list-from-filaments-btn" class="p-2 rounded-full hover:bg-gray-700 mr-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <h1 class="text-3xl font-bold text-white">Filament Inventory</h1>
+                </div>
+                <button id="add-filament-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Add Filament</span>
+                </button>
+            </header>
+            <div class="bg-gray-800 p-8 rounded-xl shadow-lg">
+                <div id="filaments-list" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Filament cards will be inserted here -->
+                </div>
             </div>
         </div>
     </div>
@@ -193,6 +218,81 @@
         </div>
     </template>
 
+    <template id="filament-card-template">
+        <div class="filament-card bg-gray-700 rounded-lg shadow-lg p-4 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-start">
+                    <h3 class="filament-name text-lg font-bold text-white"></h3>
+                    <div class="flex gap-2">
+                        <button class="edit-filament-btn p-1 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                        <button class="delete-filament-btn p-1 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                    </div>
+                </div>
+                <p class="filament-details text-sm text-gray-400"></p>
+            </div>
+            <div class="mt-4">
+                <div class="w-full bg-gray-600 rounded-full h-2.5">
+                    <div class="filament-remaining-bar bg-blue-500 h-2.5 rounded-full"></div>
+                </div>
+                <p class="filament-remaining-text text-xs text-gray-300 mt-1 text-right"></p>
+            </div>
+        </div>
+    </template>
+
+    <template id="filament-select-template">
+        <h3 class="text-xl font-bold text-white mb-4">Select a Filament</h3>
+        <div id="filament-select-list" class="space-y-2 max-h-96 overflow-y-auto">
+            <!-- Filament options will be inserted here -->
+        </div>
+        <div class="flex justify-end space-x-4 pt-4">
+            <button type="button" class="modal-cancel-btn px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Cancel</button>
+            <button type="button" id="confirm-filament-select-btn" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-semibold">Select</button>
+        </div>
+    </template>
+
+    <template id="filament-form-template">
+        <h3 class="modal-title text-xl font-bold text-white mb-4"></h3>
+        <form id="filament-form" class="space-y-4">
+            <input type="hidden" id="filament-id">
+            <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">Display Name</label>
+                <input type="text" id="filament-name" class="w-full p-3 bg-gray-700 rounded-md text-white border border-gray-600" required>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">Material</label>
+                    <input type="text" id="filament-material" placeholder="e.g., PLA, PETG" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">Color</label>
+                    <input type="text" id="filament-color" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+            </div>
+             <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">Manufacturer</label>
+                <input type="text" id="filament-manufacturer" class="w-full p-3 bg-gray-700 rounded-md">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">Purchase Price ($)</label>
+                    <input type="number" id="filament-purchase_price" step="0.01" placeholder="e.g., 22.99" class="w-full p-3 bg-gray-700 rounded-md">
+                </div>
+                <div>
+                    <label class="text-sm font-bold text-gray-400 block mb-2">Spool Weight (g)</label>
+                    <input type="number" id="filament-spool_weight_grams" value="1000" class="w-full p-3 bg-gray-700 rounded-md" required>
+                </div>
+            </div>
+            <div>
+                <label class="text-sm font-bold text-gray-400 block mb-2">Remaining Weight (g)</label>
+                <input type="number" id="filament-remaining_weight_grams" class="w-full p-3 bg-gray-700 rounded-md" required>
+            </div>
+            <div class="flex justify-end space-x-4 pt-4">
+                <button type="button" class="modal-cancel-btn px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Cancel</button>
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-semibold">Save</button>
+            </div>
+        </form>
+    </template>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             
@@ -207,6 +307,7 @@
                 currentPage: 'login',
                 printers: [],
                 locations: [],
+                filaments: [],
                 selectedPrinterId: null,
                 formMode: 'add', // 'add' or 'edit'
                 ws: null,
@@ -217,6 +318,7 @@
                 list: document.getElementById('list-page'),
                 detail: document.getElementById('detail-page'),
                 locations: document.getElementById('locations-page'),
+                filaments: document.getElementById('filaments-page'),
             };
             
             const modal = document.getElementById('modal');
@@ -225,6 +327,9 @@
                 printerCard: document.getElementById('printer-card-template'),
                 printerForm: document.getElementById('printer-form-template'),
                 deleteConfirm: document.getElementById('delete-confirm-template'),
+                filamentCard: document.getElementById('filament-card-template'),
+                filamentForm: document.getElementById('filament-form-template'),
+                filamentSelect: document.getElementById('filament-select-template'),
             };
 
             function navigate(page, printerId = null) {
@@ -237,6 +342,7 @@
                 if (page === 'list') renderPrinterList();
                 else if (page === 'detail' && printerId) renderPrinterDetail();
                 else if (page === 'locations') renderLocationsList();
+                else if (page === 'filaments') renderFilamentsList();
             }
             
             // --- MODAL LOGIC ---
@@ -272,15 +378,17 @@
 
             async function fetchData() {
                 try {
-                    const [printers, locations] = await Promise.all([
+                    const [printers, locations, filaments] = await Promise.all([
                         apiRequest('/api/printers'),
-                        apiRequest('/api/locations')
+                        apiRequest('/api/locations'),
+                        apiRequest('/api/filaments'),
                     ]);
                     const statuses = await Promise.all(
                         printers.map(p => apiRequest(`/api/printers/${p.id}/status`).catch(() => ({ online: false })))
                     );
                     state.printers = printers.map((p, i) => ({ ...p, online: statuses[i].online }));
                     state.locations = locations;
+                    state.filaments = filaments;
                     return true;
                 } catch (error) {
                     alert(`Error fetching data: ${error.message}`);
@@ -313,6 +421,89 @@
                 });
             }
 
+            function renderFilamentsList() {
+                const container = document.getElementById('filaments-list');
+                container.innerHTML = '';
+                state.filaments.forEach(f => {
+                    const card = templates.filamentCard.content.cloneNode(true).firstElementChild;
+                    card.dataset.filamentId = f.id;
+                    card.querySelector('.filament-name').textContent = f.name;
+                    card.querySelector('.filament-details').textContent = `${f.manufacturer || ''} ${f.material} - ${f.color}`;
+
+                    const percentage = (f.remaining_weight_grams / f.spool_weight_grams) * 100;
+                    const progressBar = card.querySelector('.filament-remaining-bar');
+                    progressBar.style.width = `${percentage}%`;
+                    if (percentage < 15) progressBar.classList.replace('bg-blue-500', 'bg-red-500');
+                    else if (percentage < 50) progressBar.classList.replace('bg-blue-500', 'bg-yellow-500');
+
+                    card.querySelector('.filament-remaining-text').textContent = `${f.remaining_weight_grams}g / ${f.spool_weight_grams}g remaining`;
+                    container.appendChild(card);
+                });
+            }
+
+            function openFilamentSelectModal() {
+                showModal(templates.filamentSelect, () => {
+                    const listContainer = modalContent.querySelector('#filament-select-list');
+                    // Add an option to unload filament
+                    listContainer.innerHTML = `
+                        <label class="block p-3 rounded-md bg-gray-700 hover:bg-gray-600 cursor-pointer">
+                            <input type="radio" name="filament-option" value="null" class="mr-2">
+                            <span class="font-semibold text-white">Unload Filament</span>
+                        </label>`;
+
+                    state.filaments.forEach(f => {
+                        const label = document.createElement('label');
+                        label.className = 'block p-3 rounded-md bg-gray-700 hover:bg-gray-600 cursor-pointer';
+                        label.innerHTML = `
+                            <input type="radio" name="filament-option" value="${f.id}" class="mr-2">
+                            <span class="font-semibold text-white">${f.name}</span>
+                            <span class="text-sm text-gray-400 ml-2">${f.material} - ${f.color}</span>
+                        `;
+                        listContainer.appendChild(label);
+                    });
+
+                    modalContent.querySelector('#confirm-filament-select-btn').addEventListener('click', async () => {
+                        const selectedValue = modalContent.querySelector('input[name="filament-option"]:checked')?.value;
+                        if (selectedValue !== undefined) {
+                            const filamentId = selectedValue === 'null' ? null : selectedValue;
+                            try {
+                                await apiRequest(`/api/printers/${state.selectedPrinterId}/filament`, 'POST', { filament_id: filamentId });
+                                await fetchData();
+                                renderLoadedFilament();
+                                hideModal();
+                            } catch (error) {
+                                alert(`Error updating filament: ${error.message}`);
+                            }
+                        }
+                    });
+                });
+            }
+
+            function renderLoadedFilament() {
+                const container = document.getElementById('detail-filament-container');
+                const printer = state.printers.find(p => p.id === state.selectedPrinterId);
+                const filament = state.filaments.find(f => f.id === printer.current_filament_id);
+
+                if (filament) {
+                    const percentage = (filament.remaining_weight_grams / filament.spool_weight_grams) * 100;
+                    container.innerHTML = `
+                        <p class="text-white font-semibold">${filament.name}</p>
+                        <p class="text-sm text-gray-400">${filament.material} - ${filament.color}</p>
+                        <div class="w-full bg-gray-600 rounded-full h-2.5 my-2">
+                            <div class="bg-blue-500 h-2.5 rounded-full" style="width: ${percentage}%"></div>
+                        </div>
+                        <p class="text-xs text-gray-300 text-right">${filament.remaining_weight_grams}g remaining</p>
+                        <button id="change-filament-btn" class="mt-2 w-full text-center px-4 py-2 text-sm rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold">Change</button>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <p class="text-gray-400">No filament loaded.</p>
+                        <button id="change-filament-btn" class="mt-2 w-full text-center px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white font-semibold">Load Filament</button>
+                    `;
+                }
+                document.getElementById('change-filament-btn').addEventListener('click', openFilamentSelectModal);
+            }
+
             async function renderPrinterDetail() {
                 const printer = state.printers.find(p => p.id === state.selectedPrinterId);
                 if (!printer) { navigate('list'); return; }
@@ -332,9 +523,11 @@
                 </div>
                 <div class="lg:col-span-1 space-y-6">
                     <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Monitoring</h3><img id="detail-video" src="${API_CONFIG.getVideoUrl(printer.id)}" class="w-full rounded-lg bg-black"></div>
+                    <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Loaded Filament</h3><div id="detail-filament-container"></div></div>
                     <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Temperature</h3><div id="detail-temp-container" class="divide-y divide-gray-700"></div></div>
                     <div class="bg-gray-800 rounded-xl shadow-lg p-4"><h3 class="text-lg font-bold text-white mb-2">Model Image</h3><img id="detail-model-image" src="https://placehold.co/600x400/1F2937/FFFFFF?text=Waiting..." class="w-full h-auto object-contain rounded-lg bg-gray-700"></div>
                 </div>`;
+                renderLoadedFilament();
                 connectWebSocket(printer.id);
             }
 
@@ -407,6 +600,32 @@
                 }
             }
 
+            async function handleFilamentFormSubmit(e) {
+                e.preventDefault();
+                const filamentData = {
+                    name: document.getElementById('filament-name').value,
+                    material: document.getElementById('filament-material').value,
+                    color: document.getElementById('filament-color').value,
+                    manufacturer: document.getElementById('filament-manufacturer').value,
+                    purchase_price: Math.round(parseFloat(document.getElementById('filament-purchase_price').value) * 100),
+                    spool_weight_grams: parseInt(document.getElementById('filament-spool_weight_grams').value),
+                    remaining_weight_grams: parseInt(document.getElementById('filament-remaining_weight_grams').value),
+                };
+                try {
+                    if (state.formMode === 'add') {
+                        await apiRequest('/api/filaments', 'POST', filamentData);
+                    } else {
+                        const filamentId = document.getElementById('filament-id').value;
+                        await apiRequest(`/api/filaments/${filamentId}`, 'PUT', filamentData);
+                    }
+                    await fetchData();
+                    renderFilamentsList();
+                    hideModal();
+                } catch (error) {
+                    alert(`Error saving filament: ${error.message}`);
+                }
+            }
+
             // --- EVENT LISTENERS ---
             document.getElementById('login-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -422,7 +641,9 @@
             document.getElementById('logout-btn').addEventListener('click', () => navigate('login'));
             document.getElementById('back-to-list-btn').addEventListener('click', () => navigate('list'));
             document.getElementById('back-to-list-from-locations-btn').addEventListener('click', () => navigate('list'));
+            document.getElementById('back-to-list-from-filaments-btn').addEventListener('click', () => navigate('list'));
             document.getElementById('manage-locations-btn').addEventListener('click', () => navigate('locations'));
+            document.getElementById('manage-filaments-btn').addEventListener('click', () => navigate('filaments'));
 
             document.getElementById('printer-list-container').addEventListener('click', (e) => {
                 const card = e.target.closest('.printer-card');
@@ -471,6 +692,23 @@
                 });
             });
             
+            document.getElementById('add-filament-btn').addEventListener('click', () => {
+                state.formMode = 'add';
+                showModal(templates.filamentForm, () => {
+                    modalContent.querySelector('.modal-title').textContent = 'Add New Filament';
+                    // Set remaining weight to spool weight by default for new spools
+                    const spoolWeightInput = modalContent.querySelector('#filament-spool_weight_grams');
+                    const remainingWeightInput = modalContent.querySelector('#filament-remaining_weight_grams');
+                    spoolWeightInput.addEventListener('input', () => {
+                        if (state.formMode === 'add') {
+                            remainingWeightInput.value = spoolWeightInput.value;
+                        }
+                    });
+                    remainingWeightInput.value = spoolWeightInput.value;
+                    modalContent.querySelector('#filament-form').addEventListener('submit', handleFilamentFormSubmit);
+                });
+            });
+
             document.getElementById('add-location-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const input = document.getElementById('new-location-name');
@@ -483,6 +721,39 @@
                         input.value = '';
                     } catch (error) {
                         alert(`Error adding location: ${error.message}`);
+                    }
+                }
+            });
+
+            document.getElementById('filaments-list').addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-filament-btn');
+                const deleteBtn = e.target.closest('.delete-filament-btn');
+                const card = e.target.closest('.filament-card');
+                if (!card) return;
+
+                const filamentId = card.dataset.filamentId;
+                const filament = state.filaments.find(f => f.id === filamentId);
+
+                if (editBtn) {
+                    state.formMode = 'edit';
+                    showModal(templates.filamentForm, () => {
+                        modalContent.querySelector('.modal-title').textContent = 'Edit Filament';
+                        modalContent.querySelector('#filament-id').value = filament.id;
+                        modalContent.querySelector('#filament-name').value = filament.name;
+                        modalContent.querySelector('#filament-material').value = filament.material;
+                        modalContent.querySelector('#filament-color').value = filament.color;
+                        modalContent.querySelector('#filament-manufacturer').value = filament.manufacturer;
+                        modalContent.querySelector('#filament-purchase_price').value = filament.purchase_price / 100;
+                        modalContent.querySelector('#filament-spool_weight_grams').value = filament.spool_weight_grams;
+                        modalContent.querySelector('#filament-remaining_weight_grams').value = filament.remaining_weight_grams;
+                        modalContent.querySelector('#filament-form').addEventListener('submit', handleFilamentFormSubmit);
+                    });
+                } else if (deleteBtn) {
+                    if (confirm(`Are you sure you want to delete "${filament.name}"?`)) {
+                        apiRequest(`/api/filaments/${filamentId}`, 'DELETE')
+                            .then(() => fetchData())
+                            .then(() => renderFilamentsList())
+                            .catch(error => alert(`Error deleting filament: ${error.message}`));
                     }
                 }
             });
