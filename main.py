@@ -8,7 +8,8 @@ import httpx
 import websockets
 import uuid
 import os
-from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status, Depends
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +19,7 @@ from sqlalchemy import (
     MetaData, Table, Column, String, Integer,
     select, insert, update, delete
 )
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
 
 # --- Database Configuration & SQLAlchemy Setup ---
 DATABASE_URL = "sqlite+aiosqlite:///farm.db"
@@ -36,7 +37,6 @@ printers_table = Table(
     Column("websocket_port", Integer, nullable=False),
     Column("http_port", Integer, nullable=False),
     Column("video_port", Integer, nullable=False),
-    Column("current_filament_id", String, nullable=True),
 )
 
 filaments_table = Table(
@@ -114,7 +114,6 @@ async def create_tables():
                 }
             ]))
 
-
 # --- Pydantic Models for API data validation ---
 class PrinterBase(BaseModel):
     name: str
@@ -132,10 +131,6 @@ class PrinterUpdate(PrinterBase):
 
 class Printer(PrinterBase):
     id: str
-    current_filament_id: str | None = None
-
-class LoadFilamentRequest(BaseModel):
-    filament_id: str | None
 
 class LocationCreate(BaseModel):
     name: str
@@ -158,17 +153,25 @@ class FilamentUpdate(FilamentBase):
 class Filament(FilamentBase):
     id: str
 
+# --- Database Dependency ---
+async def get_db_conn() -> AsyncConnection:
+    async with engine.connect() as connection:
+        yield connection
+
 # --- FastAPI Application Setup ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # On startup, create the database tables
+    await create_tables()
+    yield
+    # On shutdown, you could add cleanup code here if needed
+
 app = FastAPI(
     title="3D Print Farm Manager API",
     description="Backend server to manage and proxy requests to Elegoo 3D printers.",
-    version="1.3.0"
+    version="1.3.0",
+    lifespan=lifespan
 )
-
-@app.on_event("startup")
-async def startup_event():
-    """On application startup, create the database tables."""
-    await create_tables()
 
 # --- CORS Middleware ---
 app.add_middleware(
@@ -183,65 +186,41 @@ app.add_middleware(
 
 # Printer CRUD
 @app.get("/api/printers", response_model=List[Printer], tags=["Printers"])
-async def get_all_printers():
-    async with engine.connect() as conn:
-        result = await conn.execute(select(printers_table))
-        # Convert SQLAlchemy rows to plain dictionaries so Pydantic can validate them
-        return [dict(row) for row in result.mappings().all()]
+async def get_all_printers(conn: AsyncConnection = Depends(get_db_conn)):
+    result = await conn.execute(select(printers_table))
+    # Convert SQLAlchemy rows to plain dictionaries so Pydantic can validate them
+    return [dict(row) for row in result.mappings().all()]
 
 @app.post("/api/printers", response_model=Printer, status_code=status.HTTP_201_CREATED, tags=["Printers"])
-async def create_printer(printer: PrinterCreate):
-    async with engine.connect() as conn:
-        new_id = str(uuid.uuid4())
-        stmt = insert(printers_table).values(id=new_id, **printer.model_dump())
-        await conn.execute(stmt)
-        await conn.commit()
-        return {"id": new_id, **printer.model_dump()}
+async def create_printer(printer: PrinterCreate, conn: AsyncConnection = Depends(get_db_conn)):
+    new_id = str(uuid.uuid4())
+    stmt = insert(printers_table).values(id=new_id, **printer.model_dump())
+    await conn.execute(stmt)
+    await conn.commit()
+    return {"id": new_id, **printer.model_dump()}
 
 @app.put("/api/printers/{printer_id}", response_model=Printer, tags=["Printers"])
-async def update_printer(printer_id: str, printer_data: PrinterUpdate):
-    async with engine.connect() as conn:
-        stmt = update(printers_table).where(printers_table.c.id == printer_id).values(**printer_data.model_dump())
-        result = await conn.execute(stmt)
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Printer not found")
-        await conn.commit()
-        return {"id": printer_id, **printer_data.model_dump()}
+async def update_printer(printer_id: str, printer_data: PrinterUpdate, conn: AsyncConnection = Depends(get_db_conn)):
+    stmt = update(printers_table).where(printers_table.c.id == printer_id).values(**printer_data.model_dump())
+    result = await conn.execute(stmt)
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    await conn.commit()
+    return {"id": printer_id, **printer_data.model_dump()}
 
 @app.delete("/api/printers/{printer_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Printers"])
-async def delete_printer(printer_id: str):
-    async with engine.connect() as conn:
-        stmt = delete(printers_table).where(printers_table.c.id == printer_id)
-        result = await conn.execute(stmt)
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Printer not found")
-        await conn.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-@app.post("/api/printers/{printer_id}/filament", status_code=status.HTTP_204_NO_CONTENT, tags=["Printers"])
-async def load_filament_to_printer(printer_id: str, request: LoadFilamentRequest):
-    async with engine.connect() as conn:
-        # Verify printer exists
-        printer_check = await conn.execute(select(printers_table).where(printers_table.c.id == printer_id))
-        if printer_check.first() is None:
-            raise HTTPException(status_code=404, detail="Printer not found")
-
-        # Verify filament exists if one is provided
-        if request.filament_id:
-            filament_check = await conn.execute(select(filaments_table).where(filaments_table.c.id == request.filament_id))
-            if filament_check.first() is None:
-                raise HTTPException(status_code=404, detail="Filament not found")
-
-        # Update the printer's current_filament_id
-        stmt = update(printers_table).where(printers_table.c.id == printer_id).values(current_filament_id=request.filament_id)
-        await conn.execute(stmt)
-        await conn.commit()
+async def delete_printer(printer_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    stmt = delete(printers_table).where(printers_table.c.id == printer_id)
+    result = await conn.execute(stmt)
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.get("/api/printers/{printer_id}/status", tags=["Printers"])
-async def get_printer_status(printer_id: str):
+async def get_printer_status(printer_id: str, conn: AsyncConnection = Depends(get_db_conn)):
     """Return online/offline status for a printer."""
-    printer = await get_printer_details_from_db(printer_id)
+    printer = await get_printer_details_from_db(printer_id, conn)
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
     url = f"http://{printer.ip_address}:{printer.http_port}"
@@ -254,95 +233,81 @@ async def get_printer_status(printer_id: str):
 
 # Location CRUD
 @app.get("/api/locations", response_model=List[str], tags=["Locations"])
-async def get_all_locations():
-    async with engine.connect() as conn:
-        result = await conn.execute(select(locations_table.c.name))
-        return [row[0] for row in result.fetchall()]
+async def get_all_locations(conn: AsyncConnection = Depends(get_db_conn)):
+    result = await conn.execute(select(locations_table.c.name))
+    return [row[0] for row in result.fetchall()]
 
 @app.post("/api/locations", status_code=status.HTTP_201_CREATED, tags=["Locations"])
-async def create_location(location: LocationCreate):
-    async with engine.connect() as conn:
-        try:
-            stmt = insert(locations_table).values(name=location.name)
-            await conn.execute(stmt)
-            await conn.commit()
-        except Exception: # Catches unique constraint violation
-            raise HTTPException(status_code=409, detail="Location already exists")
+async def create_location(location: LocationCreate, conn: AsyncConnection = Depends(get_db_conn)):
+    try:
+        stmt = insert(locations_table).values(name=location.name)
+        await conn.execute(stmt)
+        await conn.commit()
+    except Exception: # Catches unique constraint violation
+        raise HTTPException(status_code=409, detail="Location already exists")
     return {"message": "Location created successfully"}
 
 @app.delete("/api/locations/{location_name}", status_code=status.HTTP_204_NO_CONTENT, tags=["Locations"])
-async def delete_location(location_name: str):
-    async with engine.connect() as conn:
-        # Check if location is in use
-        query = select(printers_table).where(printers_table.c.location == location_name)
-        printer_using_location = await conn.execute(query)
-        if printer_using_location.first():
-            raise HTTPException(status_code=400, detail="Cannot delete location as it is currently in use by a printer.")
+async def delete_location(location_name: str, conn: AsyncConnection = Depends(get_db_conn)):
+    # Check if location is in use
+    query = select(printers_table).where(printers_table.c.location == location_name)
+    printer_using_location = await conn.execute(query)
+    if printer_using_location.first():
+        raise HTTPException(status_code=400, detail="Cannot delete location as it is currently in use by a printer.")
 
-        stmt = delete(locations_table).where(locations_table.c.name == location_name)
-        result = await conn.execute(stmt)
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Location not found")
-        await conn.commit()
+    stmt = delete(locations_table).where(locations_table.c.name == location_name)
+    result = await conn.execute(stmt)
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Location not found")
+    await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # Filament CRUD
 @app.get("/api/filaments", response_model=List[Filament], tags=["Filaments"])
-async def get_all_filaments():
-    async with engine.connect() as conn:
-        result = await conn.execute(select(filaments_table))
-        return [dict(row) for row in result.mappings().all()]
+async def get_all_filaments(conn: AsyncConnection = Depends(get_db_conn)):
+    result = await conn.execute(select(filaments_table))
+    return [dict(row) for row in result.mappings().all()]
 
 @app.post("/api/filaments", response_model=Filament, status_code=status.HTTP_201_CREATED, tags=["Filaments"])
-async def create_filament(filament: FilamentCreate):
-    async with engine.connect() as conn:
-        new_id = str(uuid.uuid4())
-        stmt = insert(filaments_table).values(id=new_id, **filament.model_dump())
-        await conn.execute(stmt)
-        await conn.commit()
-        return {"id": new_id, **filament.model_dump()}
+async def create_filament(filament: FilamentCreate, conn: AsyncConnection = Depends(get_db_conn)):
+    new_id = str(uuid.uuid4())
+    stmt = insert(filaments_table).values(id=new_id, **filament.model_dump())
+    await conn.execute(stmt)
+    await conn.commit()
+    return {"id": new_id, **filament.model_dump()}
 
 @app.put("/api/filaments/{filament_id}", response_model=Filament, tags=["Filaments"])
-async def update_filament(filament_id: str, filament_data: FilamentUpdate):
-    async with engine.connect() as conn:
-        stmt = update(filaments_table).where(filaments_table.c.id == filament_id).values(**filament_data.model_dump())
-        result = await conn.execute(stmt)
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Filament not found")
-        await conn.commit()
-        return {"id": filament_id, **filament_data.model_dump()}
+async def update_filament(filament_id: str, filament_data: FilamentUpdate, conn: AsyncConnection = Depends(get_db_conn)):
+    stmt = update(filaments_table).where(filaments_table.c.id == filament_id).values(**filament_data.model_dump())
+    result = await conn.execute(stmt)
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    await conn.commit()
+    return {"id": filament_id, **filament_data.model_dump()}
 
 @app.delete("/api/filaments/{filament_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Filaments"])
-async def delete_filament(filament_id: str):
-    async with engine.connect() as conn:
-        # Check if filament is in use
-        query = select(printers_table).where(printers_table.c.current_filament_id == filament_id)
-        printer_using_filament = await conn.execute(query)
-        if printer_using_filament.first():
-            raise HTTPException(status_code=400, detail="Cannot delete filament as it is currently loaded in a printer.")
-
-        stmt = delete(filaments_table).where(filaments_table.c.id == filament_id)
-        result = await conn.execute(stmt)
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Filament not found")
-        await conn.commit()
+async def delete_filament(filament_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    stmt = delete(filaments_table).where(filaments_table.c.id == filament_id)
+    result = await conn.execute(stmt)
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Filament not found")
+    await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- WebSocket and HTTP Proxies ---
-async def get_printer_details_from_db(printer_id: str):
+async def get_printer_details_from_db(printer_id: str, conn: AsyncConnection):
     """Helper to fetch printer details for proxies."""
-    async with engine.connect() as conn:
-        query = select(printers_table).where(printers_table.c.id == printer_id)
-        result = await conn.execute(query)
-        printer = result.first()
-        if not printer:
-            return None
-        return printer
+    query = select(printers_table).where(printers_table.c.id == printer_id)
+    result = await conn.execute(query)
+    printer = result.first()
+    if not printer:
+        return None
+    return printer
 
 @app.websocket("/printers/{printer_id}/websocket")
-async def websocket_proxy(websocket: WebSocket, printer_id: str):
-    printer = await get_printer_details_from_db(printer_id)
+async def websocket_proxy(websocket: WebSocket, printer_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    printer = await get_printer_details_from_db(printer_id, conn)
     if not printer:
         await websocket.close(code=1008, reason="Printer not found")
         return
@@ -442,15 +407,15 @@ async def http_proxy_get_content(target_url: str):
 
 
 @app.get("/printers/{printer_id}/video", tags=["Proxy"])
-async def video_proxy(request: Request, printer_id: str):
-    printer = await get_printer_details_from_db(printer_id)
+async def video_proxy(request: Request, printer_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    printer = await get_printer_details_from_db(printer_id, conn)
     if not printer: raise HTTPException(status_code=404, detail="Printer not found")
     target_url = f"http://{printer.ip_address}:{printer.video_port}/video"
     return await http_proxy_stream(request, target_url)
 
 @app.get("/printers/{printer_id}/board-resource/history_image/{task_id}.png", tags=["Proxy"])
-async def image_proxy(request: Request, printer_id: str, task_id: str):
-    printer = await get_printer_details_from_db(printer_id)
+async def image_proxy(request: Request, printer_id: str, task_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    printer = await get_printer_details_from_db(printer_id, conn)
     if not printer: raise HTTPException(status_code=404, detail="Printer not found")
     target_url = f"http://{printer.ip_address}:{printer.http_port}/board-resource/history_image/{task_id}.png"
     return await http_proxy_get_content(target_url)
