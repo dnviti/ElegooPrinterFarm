@@ -36,6 +36,20 @@ printers_table = Table(
     Column("websocket_port", Integer, nullable=False),
     Column("http_port", Integer, nullable=False),
     Column("video_port", Integer, nullable=False),
+    Column("current_filament_id", String, nullable=True),
+)
+
+filaments_table = Table(
+    "filaments",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("name", String, nullable=False),
+    Column("material", String, nullable=False),
+    Column("color", String, nullable=False),
+    Column("manufacturer", String, nullable=True),
+    Column("purchase_price", Integer, nullable=True), # Storing price in cents
+    Column("spool_weight_grams", Integer, nullable=False),
+    Column("remaining_weight_grams", Integer, nullable=False),
 )
 
 locations_table = Table(
@@ -73,6 +87,34 @@ async def create_tables():
                 {"name": "Office"}
             ]))
 
+        # Seed filaments if table is empty
+        result = await conn.execute(select(filaments_table).limit(1))
+        if result.first() is None:
+            print("Seeding database with default filaments...")
+            await conn.execute(insert(filaments_table).values([
+                {
+                    "id": "f1a2b3c4-d5e6-7890-1234-567890abcdef",
+                    "name": "Overture PLA",
+                    "material": "PLA",
+                    "color": "Space Gray",
+                    "manufacturer": "Overture",
+                    "purchase_price": 2299,
+                    "spool_weight_grams": 1000,
+                    "remaining_weight_grams": 1000,
+                },
+                {
+                    "id": "g1h2i3j4-k5l6-7890-1234-567890abcdef",
+                    "name": "eSUN PETG",
+                    "material": "PETG",
+                    "color": "Black",
+                    "manufacturer": "eSUN",
+                    "purchase_price": 2499,
+                    "spool_weight_grams": 1000,
+                    "remaining_weight_grams": 750,
+                }
+            ]))
+
+
 # --- Pydantic Models for API data validation ---
 class PrinterBase(BaseModel):
     name: str
@@ -90,9 +132,31 @@ class PrinterUpdate(PrinterBase):
 
 class Printer(PrinterBase):
     id: str
+    current_filament_id: str | None = None
+
+class LoadFilamentRequest(BaseModel):
+    filament_id: str | None
 
 class LocationCreate(BaseModel):
     name: str
+
+class FilamentBase(BaseModel):
+    name: str
+    material: str
+    color: str
+    manufacturer: str | None = None
+    purchase_price: int | None = None
+    spool_weight_grams: int
+    remaining_weight_grams: int
+
+class FilamentCreate(FilamentBase):
+    pass
+
+class FilamentUpdate(FilamentBase):
+    pass
+
+class Filament(FilamentBase):
+    id: str
 
 # --- FastAPI Application Setup ---
 app = FastAPI(
@@ -154,6 +218,26 @@ async def delete_printer(printer_id: str):
         await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.post("/api/printers/{printer_id}/filament", status_code=status.HTTP_204_NO_CONTENT, tags=["Printers"])
+async def load_filament_to_printer(printer_id: str, request: LoadFilamentRequest):
+    async with engine.connect() as conn:
+        # Verify printer exists
+        printer_check = await conn.execute(select(printers_table).where(printers_table.c.id == printer_id))
+        if printer_check.first() is None:
+            raise HTTPException(status_code=404, detail="Printer not found")
+
+        # Verify filament exists if one is provided
+        if request.filament_id:
+            filament_check = await conn.execute(select(filaments_table).where(filaments_table.c.id == request.filament_id))
+            if filament_check.first() is None:
+                raise HTTPException(status_code=404, detail="Filament not found")
+
+        # Update the printer's current_filament_id
+        stmt = update(printers_table).where(printers_table.c.id == printer_id).values(current_filament_id=request.filament_id)
+        await conn.execute(stmt)
+        await conn.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/api/printers/{printer_id}/status", tags=["Printers"])
 async def get_printer_status(printer_id: str):
     """Return online/offline status for a printer."""
@@ -199,6 +283,48 @@ async def delete_location(location_name: str):
         result = await conn.execute(stmt)
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Location not found")
+        await conn.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# Filament CRUD
+@app.get("/api/filaments", response_model=List[Filament], tags=["Filaments"])
+async def get_all_filaments():
+    async with engine.connect() as conn:
+        result = await conn.execute(select(filaments_table))
+        return [dict(row) for row in result.mappings().all()]
+
+@app.post("/api/filaments", response_model=Filament, status_code=status.HTTP_201_CREATED, tags=["Filaments"])
+async def create_filament(filament: FilamentCreate):
+    async with engine.connect() as conn:
+        new_id = str(uuid.uuid4())
+        stmt = insert(filaments_table).values(id=new_id, **filament.model_dump())
+        await conn.execute(stmt)
+        await conn.commit()
+        return {"id": new_id, **filament.model_dump()}
+
+@app.put("/api/filaments/{filament_id}", response_model=Filament, tags=["Filaments"])
+async def update_filament(filament_id: str, filament_data: FilamentUpdate):
+    async with engine.connect() as conn:
+        stmt = update(filaments_table).where(filaments_table.c.id == filament_id).values(**filament_data.model_dump())
+        result = await conn.execute(stmt)
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Filament not found")
+        await conn.commit()
+        return {"id": filament_id, **filament_data.model_dump()}
+
+@app.delete("/api/filaments/{filament_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Filaments"])
+async def delete_filament(filament_id: str):
+    async with engine.connect() as conn:
+        # Check if filament is in use
+        query = select(printers_table).where(printers_table.c.current_filament_id == filament_id)
+        printer_using_filament = await conn.execute(query)
+        if printer_using_filament.first():
+            raise HTTPException(status_code=400, detail="Cannot delete filament as it is currently loaded in a printer.")
+
+        stmt = delete(filaments_table).where(filaments_table.c.id == filament_id)
+        result = await conn.execute(stmt)
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Filament not found")
         await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
