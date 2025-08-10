@@ -17,7 +17,7 @@ from typing import List
 from pydantic import BaseModel
 from sqlalchemy import (
     MetaData, Table, Column, String, Integer,
-    select, insert, update, delete
+    select, insert, update, delete, text
 )
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
 
@@ -37,6 +37,7 @@ printers_table = Table(
     Column("websocket_port", Integer, nullable=False),
     Column("http_port", Integer, nullable=False),
     Column("video_port", Integer, nullable=False),
+    Column("current_filament_id", String, nullable=True),
 )
 
 filaments_table = Table(
@@ -60,7 +61,18 @@ locations_table = Table(
 
 async def create_tables():
     """Creates the database tables and seeds them with initial data if empty."""
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
+        # Simple migration: Check if 'current_filament_id' column exists and add it if it doesn't
+        def get_columns(sync_conn):
+            result = sync_conn.execute(text("PRAGMA table_info(printers)"))
+            return [row[1] for row in result.fetchall()]
+
+        columns = await conn.run_sync(get_columns)
+        if "current_filament_id" not in columns:
+            print("Adding 'current_filament_id' column to 'printers' table...")
+            await conn.execute(text("ALTER TABLE printers ADD COLUMN current_filament_id VARCHAR"))
+            await conn.commit()
+
         await conn.run_sync(metadata.create_all)
         
         # Seed printers if table is empty
@@ -131,6 +143,10 @@ class PrinterUpdate(PrinterBase):
 
 class Printer(PrinterBase):
     id: str
+    current_filament_id: str | None = None
+
+class LoadFilamentRequest(BaseModel):
+    filament_id: str | None
 
 class LocationCreate(BaseModel):
     name: str
@@ -217,6 +233,25 @@ async def delete_printer(printer_id: str, conn: AsyncConnection = Depends(get_db
     await conn.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.post("/api/printers/{printer_id}/filament", status_code=status.HTTP_204_NO_CONTENT, tags=["Printers"])
+async def load_filament_to_printer(printer_id: str, request: LoadFilamentRequest, conn: AsyncConnection = Depends(get_db_conn)):
+    # Verify printer exists
+    printer_check = await conn.execute(select(printers_table).where(printers_table.c.id == printer_id))
+    if printer_check.first() is None:
+        raise HTTPException(status_code=404, detail="Printer not found")
+
+    # Verify filament exists if one is provided
+    if request.filament_id:
+        filament_check = await conn.execute(select(filaments_table).where(filaments_table.c.id == request.filament_id))
+        if filament_check.first() is None:
+            raise HTTPException(status_code=404, detail="Filament not found")
+
+    # Update the printer's current_filament_id
+    stmt = update(printers_table).where(printers_table.c.id == printer_id).values(current_filament_id=request.filament_id)
+    await conn.execute(stmt)
+    await conn.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/api/printers/{printer_id}/status", tags=["Printers"])
 async def get_printer_status(printer_id: str, conn: AsyncConnection = Depends(get_db_conn)):
     """Return online/offline status for a printer."""
@@ -287,6 +322,12 @@ async def update_filament(filament_id: str, filament_data: FilamentUpdate, conn:
 
 @app.delete("/api/filaments/{filament_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Filaments"])
 async def delete_filament(filament_id: str, conn: AsyncConnection = Depends(get_db_conn)):
+    # Check if filament is in use
+    query = select(printers_table).where(printers_table.c.current_filament_id == filament_id)
+    printer_using_filament = await conn.execute(query)
+    if printer_using_filament.first():
+        raise HTTPException(status_code=400, detail="Cannot delete filament as it is currently loaded in a printer.")
+
     stmt = delete(filaments_table).where(filaments_table.c.id == filament_id)
     result = await conn.execute(stmt)
     if result.rowcount == 0:
